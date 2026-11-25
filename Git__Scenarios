@@ -1,0 +1,1376 @@
+# **Next 10 Real-World Git & GitHub Scenarios (11–20)**
+
+**Topics covered in this set:**
+
+| Scenario | Git command/concept               |
+| -------- | --------------------------------- |
+| 11       | `git worktree`                    |
+| 12       | `git merge --squash`              |
+| 13       | `git revert` with merge commits   |
+| 14       | `git rebase --onto`               |
+| 15       | `git restore` from another commit |
+| 16       | `git clean`                       |
+| 17       | `git tag`                         |
+| 18       | `git blame`                       |
+| 19       | `git rerere`                      |
+| 20       | `git submodule`                   |
+
+These are additional commands beyond the previous 10 scenarios. They are covered in the official Git command reference.&#x20;
+
+## **Scenario 11: You need to fix an urgent production bug while continuing your feature development**
+
+Command: `git worktree`
+
+**Workplace situation**
+
+You are working on:
+
+```
+feature/customer-management
+```
+
+You have modified several Java files, and your feature is incomplete.
+
+Suddenly, your manager assigns you an urgent production bug:
+
+> The customer login API is returning HTTP 500. Fix it immediately.
+
+Normally, you might stash your changes and switch branches.
+
+But your manager expects you to continue feature development after fixing the bug.
+
+**Why does this happen?**
+
+Switching branches repeatedly can interrupt your workflow.
+
+Git provides `worktree`, which allows you to check out multiple branches into separate directories using the same Git repository.
+
+**Step-by-step solution**
+
+**Step 1. Check your current branch**
+
+```
+git branch
+```
+
+```
+* feature/customer-management
+  develop
+  main
+```
+
+**Step 2. Create a separate working directory for the hotfix**
+
+```
+git worktree add -b hotfix/customer-login ../customer-hotfix origin/main
+```
+
+This:
+
+- Creates a new branch called `hotfix/customer-login`.
+- Creates a separate directory called `customer-hotfix`.
+- Checks out the hotfix branch in that directory.
+
+**Step 3. Open the new directory in IntelliJ**
+
+You now have two independent working directories:
+
+```
+projects/
+│
+├── post-office/
+│   └── feature/customer-management
+│
+└── customer-hotfix/
+    └── hotfix/customer-login
+```
+
+**Step 4. Fix the login bug**
+
+Make the necessary changes in the hotfix directory.
+
+**Step 5. Commit the hotfix**
+
+Inside the hotfix directory:
+
+```
+git add .
+git commit -m "fix: resolve customer login server error"
+```
+
+**Step 6. Push the hotfix**
+
+```
+git push -u origin hotfix/customer-login
+```
+
+Create a PR targeting the appropriate production or release branch.
+
+**Step 7. Continue your original feature**
+
+Return to the original IntelliJ project.
+
+Your unfinished changes are still present in the original working directory.
+
+**Step 8. Check all worktrees**
+
+```
+git worktree list
+```
+
+Example:
+
+```
+post-office       abc123 [feature/customer-management]
+customer-hotfix  def456 [hotfix/customer-login]
+```
+
+**Step 9. Remove the temporary worktree after finishing**
+
+Once the hotfix worktree is clean and no longer needed:
+
+```
+git worktree remove ../customer-hotfix
+```
+
+**Impact**
+
+- Local: Two separate working directories share the same repository data.
+- Branches: Each worktree can have its own checked-out branch.
+- Remote: Nothing changes until you push.
+
+**Common mistakes**
+
+- Trying to check out the same branch in two worktrees.
+- Deleting a worktree directory manually without cleaning up its Git metadata.
+- Removing a worktree containing uncommitted changes.
+- Assuming worktrees are independent repository clones.
+
+**Developer perspective:** Worktrees are especially useful when handling urgent hotfixes while keeping your current feature work untouched.
+
+Reference: [Official Git worktree documentation](https://git-scm.com/docs/git-worktree?utm_source=chatgpt.com).
+
+## **Scenario 12: Your feature branch has 15 commits, but your team wants only one commit in the final PR**
+
+Command: `git merge --squash`
+
+**Workplace situation**
+
+You are developing the Account Management module.
+
+Your branch contains:
+
+```
+feature/account-management
+```
+
+You created multiple commits:
+
+```
+Add account entity
+Add account repository
+Add account service
+Fix account service
+Fix validation
+Add account controller
+Fix controller response
+Update API documentation
+```
+
+Your team lead says:
+
+> Merge the feature as a single commit into develop.
+
+**Why does this happen?**
+
+Teams sometimes prefer a clean integration history rather than retaining every intermediate development commit.
+
+`git merge --squash` combines the changes from another branch into your current working tree and staging area without creating a merge commit.
+
+**Step-by-step solution**
+
+**Step 1. Switch to develop**
+
+```
+git switch develop
+```
+
+**Step 2. Update develop**
+
+```
+git pull --ff-only origin develop
+```
+
+**Step 3. Perform a squash merge**
+
+```
+git merge --squash feature/account-management
+```
+
+Git prepares the combined changes in your staging area.
+
+**Step 4. Review the staged changes**
+
+```
+git status
+git diff --cached
+```
+
+**Step 5. Create one commit**
+
+```
+git commit -m "feat: implement account management module"
+```
+
+**Step 6. Push develop**
+
+```
+git push origin develop
+```
+
+This direct push is appropriate only if your team permits it. In a PR-protected workflow, create the squash integration through GitHub instead.
+
+**Visual understanding**
+
+Before:
+
+```
+develop:
+A---B---C
+
+feature:
+     \
+      D---E---F---G
+```
+
+After squash integration:
+
+```
+A---B---C---S
+```
+
+`S` contains the combined changes from the feature branch.
+
+**Impact**
+
+- Local: Feature changes are staged on develop.
+- Local history: One new commit is created.
+- Remote: Updated after pushing.
+- Original feature branch: Its commits are not deleted.
+
+**Important difference:&#x20;**`git merge --squash`**&#x20;vs interactive rebase**
+
+| `git merge --squash`                      | `git rebase -i`                         |
+| ----------------------------------------- | --------------------------------------- |
+| Combines changes from another branch      | Rewrites commits in your current branch |
+| Creates no merge commit                   | Can combine existing commits            |
+| Creates one new commit after `git commit` | Creates rewritten commit history        |
+
+**Common mistakes**
+
+- Assuming squash merge deletes the original feature branch.
+- Forgetting to review staged changes.
+- Using it when the team requires individual commits to be preserved.
+- Directly pushing to protected branches.
+
+**Developer perspective:** Understand your organization's PR merge strategy before choosing squash merge or interactive rebase.
+
+## **Scenario 13: A complete feature was merged into develop, but now management wants to remove it**
+
+Command: `git revert -m`
+
+**Workplace situation**
+
+Your team merged a feature PR into `develop`:
+
+```
+Feature: Customer bulk upload
+```
+
+After merging, testing reveals a serious issue.
+
+Your manager says:
+
+> Revert the entire PR from develop. We will fix it in another branch.
+
+The PR was merged using a merge commit.
+
+**Why does this happen?**
+
+A merge commit has two parents:
+
+- First parent: Usually the branch into which changes were merged.
+- Second parent: The branch that was merged.
+
+To revert a merge commit, Git needs to know which parent should be treated as the mainline.
+
+**Step-by-step solution**
+
+**Step 1. Find the merge commit**
+
+```
+git log --oneline --graph --all
+```
+
+Example:
+
+```
+a111 Merge pull request #45
+b222 Add customer bulk upload
+c333 Add CSV validation
+d444 Previous develop changes
+```
+
+**Step 2. Inspect the merge commit**
+
+```
+git show --no-patch --pretty=raw a111
+```
+
+You can inspect its parent commits.
+
+**Step 3. Revert the merge commit**
+
+```
+git revert -m 1 a111
+```
+
+Here:
+
+- `-m 1` means treat parent 1 as the mainline.
+- Git reverses the changes introduced by the merge relative to that parent.
+
+**Step 4. Resolve conflicts if necessary**
+
+```
+git status
+```
+
+Resolve any conflicts, then:
+
+```
+git add .
+git revert --continue
+```
+
+**Step 5. Verify**
+
+```
+git log --oneline -5
+```
+
+**Step 6. Push the revert**
+
+```
+git push origin develop
+```
+
+Follow your organization's branch protection and PR requirements instead of direct pushing when applicable.
+
+**Impact**
+
+- Local: A new commit reversing the merge is created.
+- Remote: Changes are reversed after pushing.
+- History: Original merge commit remains in history.
+
+**Important warning**
+
+Reverting a merge commit does not erase the fact that the branch was merged. If you later try to merge the same feature branch again, Git may consider its previous commits already integrated.
+
+A later reintroduction may require reverting the revert commit or bringing in new corrective commits, depending on the desired result.
+
+**Common mistakes**
+
+- Running `git revert a111` without specifying the mainline parent for a merge commit.
+- Using `-m 2` without understanding which parent is the mainline.
+- Assuming the original feature commits are deleted.
+- Re-merging the same branch without understanding the previous revert.
+
+**Developer perspective:** This is important in release management because production features sometimes need to be rolled back without rewriting shared history.
+
+Reference: [Official Git revert documentation](https://git-scm.com/docs/git-revert?utm_source=chatgpt.com).
+
+## **Scenario 14: You created a feature branch from another feature branch by mistake**
+
+Command: `git rebase --onto`
+
+**Workplace situation**
+
+You were assigned a task to implement Customer Reports.
+
+But another developer was already working on:
+
+```
+feature/customer-api
+```
+
+You accidentally created your branch from their feature branch instead of `develop`.
+
+Your branch:
+
+```
+feature/customer-reports
+```
+
+Now your history contains commits from both features.
+
+Your senior says:
+
+> Your report feature should depend only on develop. Remove the unrelated customer API commits from your branch history.
+
+**Why does this happen?**
+
+Sometimes developers create branches from other feature branches because they are testing dependent functionality or mistakenly select the wrong branch.
+
+You need to move only your own commits onto the correct base.
+
+`git rebase --onto` is useful for this.
+
+**Step-by-step solution**
+
+Suppose your history looks like this:
+
+```
+A---B---C  develop
+         \
+          D---E  feature/customer-api
+               \
+                F---G  feature/customer-reports
+```
+
+Here:
+
+- `D`, `E` belong to Customer API.
+- `F`, `G` belong to Customer Reports.
+
+You want:
+
+```
+A---B---C  develop
+         \
+          F'---G'  feature/customer-reports
+```
+
+**Step 1. Check the commit history**
+
+```
+git log --oneline --graph --all
+```
+
+**Step 2. Identify the unwanted base commit**
+
+Suppose `E` is the latest Customer API commit.
+
+**Step 3. Switch to your branch**
+
+```
+git switch feature/customer-reports
+```
+
+**Step 4. Rebase your commits onto develop**
+
+```
+git rebase --onto develop feature/customer-api feature/customer-reports
+```
+
+Meaning:
+
+```
+git rebase --onto <new-base> <old-base> <branch>
+```
+
+Git takes commits in `feature/customer-reports` that are not in `feature/customer-api` and reapplies them onto `develop`.
+
+**Step 5. Verify the history**
+
+```
+git log --oneline --graph
+```
+
+Check that the Customer API commits are no longer part of your report branch's ancestry.
+
+**Step 6. Run tests**
+
+```
+mvn clean test
+```
+
+**Step 7. Update the remote branch**
+
+If the branch was already pushed, coordinate with teammates before rewriting it:
+
+```
+git push --force-with-lease origin feature/customer-reports
+```
+
+**Impact**
+
+- Local: Your report commits receive new commit IDs.
+- Remote: Updated only after pushing.
+- Other branch: `feature/customer-api` remains unchanged.
+
+**Common mistakes**
+
+- Selecting the wrong old base.
+- Accidentally excluding commits that your feature actually depends on.
+- Forgetting that rebase rewrites commit history.
+- Force-pushing a shared branch without permission.
+
+**Developer perspective:** `rebase --onto` is an advanced but extremely useful command when correcting incorrectly based feature branches.
+
+Reference: [Git rebase documentation](https://git-scm.com/docs/git-rebase?utm_source=chatgpt.com).
+
+## **Scenario 15: You need to recover one Java file from an older commit without reverting the entire commit**
+
+Command: `git restore --source`
+
+**Workplace situation**
+
+You are working on the Customer module.
+
+Your current branch contains changes to:
+
+```
+CustomerController.java
+CustomerService.java
+CustomerRepository.java
+```
+
+You realize that the latest implementation of `CustomerService.java` introduced an unnecessary change.
+
+You want to recover only the older version of `CustomerService.java`, without affecting the other files.
+
+**Why does this happen?**
+
+Sometimes an individual file needs to be recovered from an earlier commit.
+
+Reverting the entire commit could undo changes in other files that you still need.
+
+**Step-by-step solution**
+
+**Step 1. Find the older commit**
+
+```
+git log --oneline
+```
+
+Example:
+
+```
+a111 Latest customer module changes
+b222 Previous stable customer service
+c333 Initial customer implementation
+```
+
+**Step 2. Inspect the old file**
+
+```
+git show b222:path/to/CustomerService.java
+```
+
+**Step 3. Restore only the required file**
+
+```
+git restore --source=b222 -- path/to/CustomerService.java
+```
+
+This updates your working copy of that file from commit `b222`.
+
+**Step 4. Review the difference**
+
+```
+git diff -- path/to/CustomerService.java
+```
+
+**Step 5. Stage and commit**
+
+```
+git add path/to/CustomerService.java
+
+git commit -m "fix: restore stable customer service implementation"
+```
+
+**Step 6. Push your branch**
+
+```
+git push origin feature/customer-api
+```
+
+**Important alternative**
+
+If you want the restored file to be staged immediately:
+
+```
+git restore --source=b222 --staged --worktree -- path/to/CustomerService.java
+```
+
+**Impact**
+
+- Local: Only the selected file is restored.
+- History: No existing commit is removed.
+- Remote: Updated only after committing and pushing.
+
+**Common mistakes**
+
+- Restoring the wrong file version.
+- Overwriting useful uncommitted changes.
+- Forgetting to review the difference before committing.
+- Confusing `git restore` with `git revert`.
+
+**Developer perspective:** Use `git restore --source` when you need a particular file from historical Git history, rather than undoing an entire commit.
+
+Reference: [Official Git restore documentation](https://git-scm.com/docs/git-restore?utm_source=chatgpt.com).
+
+## **Scenario 16: Your project contains unwanted generated files, and you want to clean your working directory**
+
+Command: `git clean`
+
+**Workplace situation**
+
+You are working on your Spring Boot project.
+
+After running Maven, your project directory contains:
+
+```
+target/
+.class
+temporary-test-file.txt
+debug.log
+```
+
+Some of these files are untracked and should not be part of your repository.
+
+Your senior asks:
+
+> Clean up unnecessary untracked files before submitting your changes.
+
+**Why does this happen?**
+
+Git tracks files that have been added to the repository. It does not automatically remove every untracked file created during development.
+
+For example, Maven generates the `target/` directory, and developers may create temporary test files.
+
+**Step-by-step solution**
+
+**Step 1. Check repository status**
+
+```
+git status
+```
+
+**Step 2. Preview which files would be deleted**
+
+```
+git clean -n
+```
+
+The `-n` option performs a dry run. It shows what would be deleted without actually deleting anything.
+
+**Step 3. Remove untracked files**
+
+```
+git clean -f
+```
+
+**Step 4. Remove untracked directories too**
+
+```
+git clean -fd
+```
+
+**Step 5. Preview removal of ignored files**
+
+```
+git clean -ndX
+```
+
+For example, this may show ignored build output such as `target/`.
+
+To remove ignored files and directories:
+
+```
+git clean -fdX
+```
+
+**Understand the commands**
+
+| Command          | Purpose                                            |
+| ---------------- | -------------------------------------------------- |
+| `git clean -n`   | Preview untracked files                            |
+| `git clean -f`   | Delete untracked files                             |
+| `git clean -fd`  | Delete untracked files and directories             |
+| `git clean -fdX` | Delete ignored files and directories               |
+| `git clean -fdx` | Delete all untracked files, including ignored ones |
+
+Destructive operation
+
+Be especially careful with:
+
+```
+git clean -fdx
+```
+
+It can delete ignored files such as local configuration files, downloaded dependencies, and generated resources.
+
+**Developer best practice:** Always run `git clean -n` before the actual deletion. Make sure important local files are backed up or properly ignored.
+
+**Developer perspective:** This command is useful when cleaning project directories, preparing clean builds, or troubleshooting unexpected local files.
+
+Reference: [Official Git clean documentation](https://git-scm.com/docs/git-clean?utm_source=chatgpt.com).
+
+## **Scenario 17: Your manager asks you to mark a stable release of your Spring Boot application**
+
+Command: `git tag`
+
+**Workplace situation**
+
+Your team has completed version 1.0 of the Post Office Management System.
+
+Your manager says:
+
+> Mark the stable production version so we can easily identify and retrieve it later.
+
+**Why does this happen?**
+
+Branches move forward as developers add new commits.
+
+But a release needs a permanent reference to a specific commit.
+
+Git tags are used to mark important points in repository history, such as:
+
+- Production releases.
+- Beta releases.
+- Release candidates.
+- Deployment versions.
+
+**Step-by-step solution**
+
+**Step 1. Switch to the release branch**
+
+```
+git switch main
+```
+
+**Step 2. Update the local branch**
+
+```
+git pull --ff-only origin main
+```
+
+**Step 3. Create an annotated tag**
+
+```
+git tag -a v1.0.0 -m "Post Office Management System version 1.0"
+```
+
+An annotated tag contains metadata such as the tagger, date, and message.
+
+**Step 4. Verify the tag**
+
+```
+git tag
+```
+
+Output:
+
+```
+v1.0.0
+```
+
+Inspect it:
+
+```
+git show v1.0.0
+```
+
+**Step 5. Push the tag to GitHub**
+
+```
+git push origin v1.0.0
+```
+
+Alternatively, push all local tags:
+
+```
+git push origin --tags
+```
+
+**Step 6. Create a GitHub Release**
+
+On GitHub:
+
+1. Open your repository.
+2. Navigate to Releases.
+3. Select Draft a new release.
+4. Select `v1.0.0`.
+5. Add release notes.
+6. Publish the release.
+
+**Suppose you need version 1.1.0 later.**
+
+After completing the next release:
+
+```
+git tag -a v1.1.0 -m "Post Office Management System version 1.1"
+git push origin v1.1.0
+```
+
+**Important: Delete a tag if necessary**
+
+Delete a local tag:
+
+```
+git tag -d v1.0.0
+```
+
+Delete a remote tag:
+
+```
+git push origin --delete v1.0.0
+```
+
+Do not delete published release tags casually. Your team may already be using them for deployments.
+
+**Impact**
+
+- Local: Tag points to a specific commit.
+- Remote: Tag becomes available after pushing.
+- GitHub: You can associate the tag with a formal Release.
+
+**Common mistakes**
+
+- Assuming creating a local tag automatically pushes it to GitHub.
+- Tagging an unstable commit.
+- Reusing release version numbers.
+- Deleting published tags without coordination.
+
+**Developer perspective:** Tags are especially important in deployment and release management. If production has a problem, the team can identify the exact source-code version deployed.
+
+Reference: [Official Git tag documentation](https://git-scm.com/docs/git-tag?utm_source=chatgpt.com).
+
+## **Scenario 18: A bug is found in a Java method, and your manager asks who introduced the change**
+
+Command: `git blame`
+
+**Workplace situation**
+
+Your Customer Service module contains this method:
+
+```
+public BigDecimal calculateBalance(
+        BigDecimal deposits,
+        BigDecimal withdrawals) {
+
+    return deposits.subtract(withdrawals);
+}
+```
+
+The method is returning incorrect balances for some customers.
+
+Your senior asks:
+
+> Find out who modified this method recently and which commit introduced the change.
+
+**Why does this happen?**
+
+In a large team, multiple developers modify the same files.
+
+You may need to investigate:
+
+- Who last modified a particular line?
+- Which commit introduced the change?
+- When was the line modified?
+- What was the original implementation?
+
+Git provides `blame` for line-by-line history investigation.
+
+**Step-by-step solution**
+
+**Step 1. Run git blame**
+
+```
+git blame src/main/java/com/example/service/CustomerService.java
+```
+
+Example output:
+
+```
+a123abc (Developer A 2026-11-20) return deposits.subtract(withdrawals);
+b456def (Developer B 2026-11-18) BigDecimal calculateBalance(...)
+```
+
+**Step 2. Inspect a particular section**
+
+```
+git blame -L 20,35 src/main/java/com/example/service/CustomerService.java
+```
+
+This displays the history of lines 20 through 35.
+
+**Step 3. Identify the commit**
+
+Suppose the output shows:
+
+```
+a123abc
+```
+
+Inspect that commit:
+
+```
+git show a123abc
+```
+
+**Step 4. Understand the actual change**
+
+```
+git show --stat a123abc
+```
+
+You can inspect the full diff and understand what was modified.
+
+**Step 5. Discuss with the developer if necessary**
+
+Now you have the relevant technical history to investigate the issue.
+
+**Impact**
+
+- Local: Git reads existing commit history.
+- Working files: Not modified.
+- Remote: No changes.
+
+**Important clarification**
+
+`git blame` identifies who last changed particular lines according to the available history. It does not necessarily identify who caused the bug.
+
+A bug might have been introduced indirectly by an earlier change or by an incorrect assumption.
+
+**Common mistakes**
+
+- Blaming a developer personally instead of investigating the technical change.
+- Assuming the last person to edit a line introduced the bug.
+- Ignoring earlier commits and related methods.
+- Forgetting to inspect the actual commit diff.
+
+**Developer perspective:** Use `git blame` as a debugging and code-history investigation tool, not as a way to assign personal responsibility.
+
+Reference: [Official Git blame documentation](https://git-scm.com/docs/git-blame?utm_source=chatgpt.com).
+
+## **Scenario 19: You repeatedly encounter the same merge conflicts during rebasing**
+
+Command: `git rerere`
+
+**Workplace situation**
+
+You are working on a large feature branch:
+
+```
+feature/account-management
+```
+
+Your team frequently updates `develop`.
+
+Every time you rebase your feature branch, Git reports conflicts in:
+
+```
+AccountService.java
+AccountController.java
+AccountRepository.java
+```
+
+You resolve these conflicts manually.
+
+A few days later, another rebase creates similar conflicts in the same files.
+
+Your senior asks:
+
+> Can Git remember our previous conflict resolutions?
+
+**Why does this happen?**
+
+When developers repeatedly integrate changes from long-running branches, similar conflicts may occur multiple times.
+
+Git provides `rerere`, meaning *Reuse Recorded Resolution*.
+
+It can remember how you resolved a conflict and reuse that resolution when Git encounters the same conflict again.
+
+**Step-by-step solution**
+
+**Step 1. Enable rerere**
+
+```
+git config --global rerere.enabled true
+```
+
+This enables rerere across your repositories.
+
+If you want to enable it only for the current repository:
+
+```
+git config rerere.enabled true
+```
+
+**Step 2. Start a rebase**
+
+```
+git fetch origin
+
+git switch feature/account-management
+
+git rebase origin/develop
+```
+
+**Step 3. Resolve the first conflict manually**
+
+Open `AccountService.java`.
+
+Understand both implementations and write the correct final code.
+
+Then stage the resolved file:
+
+```
+git add AccountService.java
+```
+
+Continue:
+
+```
+git rebase --continue
+```
+
+With rerere enabled, Git records the conflict resolution for future reuse.
+
+**Step 4. Another rebase creates the same conflict**
+
+```
+git fetch origin
+
+git rebase origin/develop
+```
+
+If Git recognizes the same conflict, it can reuse the previous resolution.
+
+**Step 5. Inspect the result**
+
+```
+git status
+git diff
+```
+
+Do not blindly trust a reused resolution. Review the code carefully.
+
+If the conflict was automatically resolved and staged, inspect it before continuing the rebase.
+
+**Step 6. Continue the rebase**
+
+```
+git rebase --continue
+```
+
+**Additional command**
+
+```
+git rerere status
+```
+
+This displays files with recorded or pending conflict resolutions.
+
+**Impact**
+
+- Local: Conflict resolutions are recorded in the repository's Git metadata.
+- Remote: Nothing changes automatically.
+- Collaboration: Other developers do not automatically receive your local rerere database.
+
+**Common mistakes**
+
+- Assuming rerere resolves every possible conflict.
+- Trusting automatically reused code without reviewing it.
+- Enabling it without understanding that previous resolutions may be reused.
+- Confusing rerere with automatic merging.
+
+**Developer perspective:** This command is particularly useful in long-running feature branches and projects with frequent rebases.
+
+Reference: [Official Git rerere documentation](https://git-scm.com/docs/git-rerere?utm_source=chatgpt.com).
+
+## **Scenario 20: Your Spring Boot project depends on another Git repository maintained by a different team**
+
+Command: `git submodule`
+
+**Workplace situation**
+
+Your organization has two repositories:
+
+```
+post-office-management
+common-validation-library
+```
+
+The Post Office Management project uses validation classes maintained by another team.
+
+Your manager says:
+
+> Include the common validation library in our project, but keep its source code maintained separately.
+
+**Why does this happen?**
+
+In large organizations, teams often maintain reusable libraries separately.
+
+For example:
+
+- Common authentication library.
+- Logging utility.
+- Validation library.
+- Shared DTO library.
+- Internal SDK.
+
+Git submodules allow one Git repository to reference another repository at a specific commit.
+
+**Step-by-step solution**
+
+**Step 1. Open your main project**
+
+```
+cd post-office-management
+```
+
+**Step 2. Add the external repository as a submodule**
+
+```
+git submodule add https://github.com/company/common-validation-library.git libs/common-validation
+```
+
+This creates a submodule reference in your main repository.
+
+Your project may look like:
+
+```
+post-office-management/
+│
+├── src/
+├── pom.xml
+├── libs/
+│   └── common-validation/
+│
+└── .gitmodules
+```
+
+**Step 3. Check the Git status**
+
+```
+git status
+```
+
+Git tracks the submodule reference and `.gitmodules` configuration, not every internal file as ordinary files in the parent repository.
+
+**Step 4. Commit the submodule reference**
+
+```
+git add .gitmodules libs/common-validation
+
+git commit -m "chore: add common validation submodule"
+```
+
+**Step 5. Push the main project**
+
+```
+git push origin develop
+```
+
+**Step 6. A teammate clones the main repository**
+
+The teammate runs:
+
+```
+git clone https://github.com/company/post-office-management.git
+```
+
+The submodule directory may initially be empty or uninitialized.
+
+To initialize and download the submodule:
+
+```
+git submodule update --init --recursive
+```
+
+Alternatively, clone the project with its submodules in one step:
+
+```
+git clone --recurse-submodules https://github.com/company/post-office-management.git
+```
+
+**Step 7. The common library gets updated**
+
+If the library team publishes a new version and your project needs it:
+
+```
+git submodule update --remote libs/common-validation
+```
+
+Review the resulting submodule pointer change, test the application, commit the updated pointer, and push the main repository.
+
+**Impact**
+
+- Main repository: Stores a reference to a specific submodule commit.
+- Submodule repository: Maintains its own independent history.
+- Remote: Both repositories remain separate; the parent repository records the selected submodule commit.
+
+**Common mistakes**
+
+- Forgetting to initialize submodules after cloning.
+- Assuming the submodule automatically updates when the external repository changes.
+- Updating the submodule without committing the new reference in the parent repository.
+- Not having access to the private submodule repository.
+
+**Developer perspective:** Submodules are useful when a company wants to reuse shared Git-managed components while maintaining separate ownership and version histories.
+
+Reference: [Official Git submodule documentation](https://git-scm.com/docs/git-submodule?utm_source=chatgpt.com).
+
+## **Quick revision: Advanced Git commands (Scenarios 11–20)**
+
+| Command                | When to use it                                     |
+| ---------------------- | -------------------------------------------------- |
+| `git worktree`         | Work on multiple branches in separate directories  |
+| `git merge --squash`   | Combine feature changes into one commit            |
+| `git revert -m 1`      | Revert a merge commit                              |
+| `git rebase --onto`    | Move selected commits onto a different base        |
+| `git restore --source` | Recover a specific file from an older commit       |
+| `git clean`            | Remove untracked files and directories             |
+| `git tag`              | Mark a release version                             |
+| `git blame`            | Investigate line-by-line file history              |
+| `git rerere`           | Reuse previously recorded conflict resolutions     |
+| `git submodule`        | Include another Git repository inside your project |
+
+## **Important Git concepts to remember**
+
+These are common areas where developers make mistakes:
+
+1. **Worktree vs branch:** A branch is a reference to commit history; a worktree is a separate working directory.
+2. **Squash merge vs rebase:** Squash merge combines changes into one integration commit; rebase rewrites commits onto another base.
+3. **Reset vs restore vs revert:** Reset moves branch history, restore changes files, and revert creates a reversing commit.
+4. **Cherry-pick vs merge:** Cherry-pick applies selected commits; merge integrates branch histories.
+5. **Tag vs branch:** A branch normally moves as new commits are added; a release tag identifies a particular point in history.
+6. **Submodule vs normal folder:** A submodule maintains its own Git repository and history.
+
+For additional reference, see the [official Git command reference](https://git-scm.com/docs/git?utm_source=chatgpt.com).
+
+## **Practice challenge: Test your advanced Git knowledge**
+
+**Advanced Git assessment**
+
+0/10 answered
+
+**11. You need to fix a production bug without disturbing your unfinished feature work. Which command is most suitable?**
+
+git reset
+
+git worktree
+
+git clean
+
+git blame
+
+**12. Your team wants all feature changes integrated as one commit. What should you use?**
+
+git merge --squash
+
+git reset --hard
+
+git cherry-pick -n
+
+git fetch
+
+**13. You need to reverse a merge commit. Which command is appropriate?**
+
+git revert HEAD
+
+git revert -m 1 \<commit>
+
+git reset --soft HEAD\~1
+
+git merge --abort
+
+**14. You accidentally created a feature branch from another feature branch. Which command can move only your commits onto develop?**
+
+git cherry-pick
+
+git rebase --onto
+
+git stash
+
+git tag
+
+**15. You want only CustomerService.java from an older commit, not the entire commit. What should you use?**
+
+git revert
+
+git reset --hard
+
+git restore --source
+
+git merge
+
+**16. You want to preview which untracked files git clean would delete. What is the command?**
+
+git clean -f
+
+git clean -n
+
+git clean -fdx
+
+git status --short
+
+**17. Your manager wants to identify the exact production release commit. Which Git feature should you use?**
+
+git stash
+
+git blame
+
+git tag
+
+git bisect
+
+**18. You want to identify who last modified a particular line of Java code. Which command should you use?**
+
+git blame
+
+git log --all
+
+git status
+
+git branch
+
+**19. You repeatedly resolve the same conflicts during rebasing. Which feature can reuse previous resolutions?**
+
+git rerere
+
+git reset
+
+git cherry-pick
+
+git clean
+
+**20. Your project depends on a separate internal Git repository. Which feature can manage this dependency?**
+
+git worktree
+
+git submodule
+
+git revert
+
+git bisect
+
+Submit answers
+
+## **What I recommend learning next**
+
+You've now covered 20 Git scenarios. The next level should focus on situations involving multiple developers, release management, repository recovery, and GitHub collaboration.
+
+My suggested next topics are:
+
+- Git `reset` vs `revert` in complicated team situations.
+- Advanced interactive rebase and commit history editing.
+- Detached HEAD and recovering from it.
+- Git remote tracking branches and upstream configuration.
+- Git reflog and advanced recovery.
+- GitHub branch protection, CODEOWNERS, and CI/CD checks.
+- Handling accidental secrets or sensitive files committed to GitHub.
